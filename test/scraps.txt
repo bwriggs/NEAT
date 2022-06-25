@@ -1,0 +1,66 @@
+// #define LEFT(X) (X & 4)
+// #define RIGHT(X) (X & 1)
+// #define CURRENT(X) (X & 2)
+// #define TRIM(X) (X & 7)
+
+// class Automata1Base : public Dector<bool>  {
+// public:
+//     void advance() {
+//         int oldMin = min(), oldMax = max();
+//         size_t state = (operator[](min()) ? 1 : 0);
+//         Dector<bool> next = *this;
+
+//         int i = oldMin - 1;
+//         for(;;) {
+//             next[i] = nextState(state);
+//             if (i > oldMax) {
+//                 break;
+//             }
+//             ++i;
+//             state = TRIM(state << 1);
+//             if (i < oldMax && operator[](i + 1)) ++state;
+//         }
+//         for(i = (oldMin - 1); i <= (oldMax + 1); ++i) {
+//             operator[](i) = next[i];
+//         }
+//     }
+//     virtual bool nextState(size_t) = 0;
+//     friend std::ostream &operator<<(std::ostream &, const Automata1Base &);
+// };
+
+// std::ostream &operator<<(std::ostream &out, const Automata1Base &a) {
+//     for(int i = a.min(); i <= a.max(); ++i) {
+//         out << a.at(i);
+//     }
+//     return out;
+// }
+
+// class Rule30 : public Automata1Base {
+// public:
+//     Rule30() : Automata1Base() {
+//         operator[](int(0)) = true;
+//     }
+//     bool nextState(size_t state) override {
+//         switch(state) {
+//             case 7:
+//             case 6:
+//             case 5:
+//             case 0:
+//                 return false;
+//             case 4:
+//             case 3:
+//             case 2:
+//             case 1:
+//                 return true;
+//             default:
+//                 std::cerr << "what?" << std::endl;
+//                 exit(1);
+//         }
+//     }
+// };
+
+// struct Test {
+//     std::vector<double> nums;
+//     size_t id;
+//     Test(size_t len, size_t id) : nums(len), id(id) {}
+// };

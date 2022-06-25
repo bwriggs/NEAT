@@ -1,0 +1,30 @@
+idea for art / test
+game of life (with genetic history)
+give each individual a colour
+each individual has some square view of the game,
+including the genetic makeup of cells,
+they can change the board within their view, move, or pass
+fitness is evaluated by having the phenotypes compete to spread
+their genes
+
+additional mutation / system: add input
+input to "function" is now a map of values
+the network can evolve a view all possibly relevant inputs 
+
+ideas for adding more evolution to NEAT
+
+Epigenetics, protecting valuable DNA. Add another double field
+to connections representing how likely they are to change.
+can use std::discrete_distribution here
+
+Competition: (just push this off to user code for now)
+allow interaction of phenotypes during fitness evaluation
+later, Environment, mapping from network output to Environment change,
+mapping from Environment change to network input
+
+Choice of mate:
+separate network? with fixed inputs?
+based on human (/animal) psychology, optimal degree of similarity
+inputs are delta, fitness
+maybe reduce to a few possible mates, then have genomes mate selection network choose
+maybe barely reduce, really give higher fitness genomes first pick
