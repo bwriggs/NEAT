@@ -22,6 +22,9 @@ Genome NEAT::train(FitnessFunctor &ff, bool useBias) {
     InnovationTracker innovTracker;
     allDeps._innovationTracker = &innovTracker;
 
+    //mutation counts for debugging
+    // size_t mCounts[5] = {0};
+
     //make initial population
     Genome base(ff.inputs(), ff.outputs(), 0, &allDeps, useBias);
     std::vector<Genome> population;
@@ -30,30 +33,30 @@ Genome NEAT::train(FitnessFunctor &ff, bool useBias) {
         population.back().setId(i+1);
     }
     std::list<Species> speciesList;
-    std::unordered_map<size_t, std::list<Species>::iterator> genome2Species;
+    std::unordered_map<size_t, GenomeInfo> id2Info;
+    //std::unordered_map<size_t, std::list<Species>::iterator> genome2Species;
     FitnessResult bestFitness;
     //train
     for (size_t g = 0; params.maxGenerations < 0 || g < (size_t)params.maxGenerations; ++g) {
         //speciate
-        //cleat species
-        genome2Species.clear();
+        //clear species
+        id2Info.clear();
         for(Species &species : speciesList){
             species.ids.clear();
             species.bestCurrent = FitnessResult();
         }
-        std::unordered_map<size_t, size_t> id2GenomeIdx;
         for(auto git = population.begin(); git != population.end(); ++git) {
-            id2GenomeIdx[git->id()] = (git - population.begin());
             for(auto sit = speciesList.begin(); sit != speciesList.end(); ++sit) {
                 if (git->delta(sit->representative) <= params.deltaThresh) {
-                    genome2Species[git->id()] = sit;
+                    id2Info[git->id()] = GenomeInfo(&*git, sit);
                     sit->ids.insert(git->id());
                     //deal with break / fallthrough ambiguity
                     goto FOUND_SPECIES;
                 }
             }
             //make new species
-            genome2Species[git->id()] = speciesList.insert(speciesList.end(), Species(*git));
+            id2Info[git->id()] = GenomeInfo(&*git,
+                speciesList.insert(speciesList.end(), Species(*git)));
             FOUND_SPECIES:
             while(false);
         }
@@ -74,24 +77,25 @@ Genome NEAT::train(FitnessFunctor &ff, bool useBias) {
         }
 
         //calculate fitness
-        std::unordered_map<size_t, double> fitnesses;
-        NEATFR fr(fitnesses);
+        //std::unordered_map<size_t, double> fitnesses;
+        NEATFR fr(id2Info);
         try {
             ff(phenotypes, fr);
         } catch (FitnessFunctor::FitEnough &fffe) {
             //return if fit enough
-            return population[id2GenomeIdx[fffe.phenotype.id()]];
+            return *id2Info[fffe.phenotype.id()].genome;
         }
 
         //update progress stats ? (should this be after species adjustment)
-        for (auto &fr : fitnesses) {
-            if (fr.second > genome2Species[fr.first]->bestResult.fitness) {
-                genome2Species[fr.first]->bestResult.fitness = fr.second;
-                genome2Species[fr.first]->bestResult.id = g;
+        for (auto &kvp : id2Info) {
+            GenomeInfo &gi = kvp.second;
+            if (gi.fitness > gi.species->bestResult.fitness) {
+                gi.species->bestResult.fitness = gi.fitness;
+                gi.species->bestResult.id = g;
             }
-            if (fr.second > genome2Species[fr.first]->bestCurrent.fitness) {
-                genome2Species[fr.first]->bestCurrent.fitness = fr.second;
-                genome2Species[fr.first]->bestCurrent.id = fr.first;
+            if (gi.fitness > gi.species->bestCurrent.fitness) {
+                gi.species->bestCurrent.fitness = gi.fitness;
+                gi.species->bestCurrent.id = gi.genome->id();
             }
         }
 
@@ -128,22 +132,25 @@ Genome NEAT::train(FitnessFunctor &ff, bool useBias) {
         for (Species &species : speciesList) {
             for(size_t id : species.ids) {
                 //explicit fitness sharing
-                fitnesses[id] /= species.ids.size();
-                fitMinHeap.emplace(id, fitnesses[id]);
+                id2Info[id].fitness /= species.ids.size();
+                fitMinHeap.emplace(id, id2Info[id].fitness);
             }
             totalRem += species.ids.size();
         }
-
+        // std::cout << "survivalFitness = " << survivalFitness << std::endl;
         //actually remove 
-        for (size_t i = 0; i < (params.eliminateBottom * totalRem); ++i) {
+        size_t toRemove = (1 - params.survivalThresh) * fitMinHeap.size();
+        for (size_t i = 0; i < toRemove; ++i) {
             if(fitMinHeap.empty()) {
-                // std::cout << "no more to rm" << std::endl;
+                std::cout << "no more to rm" << std::endl;
+                break;
             }
             FitnessResult toRemove = fitMinHeap.top(); fitMinHeap.pop();
-            if(genome2Species.find(toRemove.id) == genome2Species.end()) {
-                // std::cout << "no such genome (" << toRemove.id << ')' << std::endl;
+            if(id2Info.find(toRemove.id) == id2Info.end()) {
+                std::cout << "no such genome (" << toRemove.id << ')' << std::endl;
+                continue;
             } 
-            Species &species = *genome2Species[toRemove.id];
+            Species &species = *id2Info[toRemove.id].species;
             auto idt = species.ids.find(toRemove.id);
             if (idt != species.ids.end()) {
                 species.ids.erase(idt);
@@ -158,7 +165,7 @@ Genome NEAT::train(FitnessFunctor &ff, bool useBias) {
                 ++numChamps;
             }
             if(sit->ids.size() > 0) {
-                sit->representative = population[id2GenomeIdx[*sit->ids.begin()]];
+                sit->representative = *id2Info[*sit->ids.begin()].genome;
                 ++sit;
             } else {
                 sit = speciesList.erase(sit);
@@ -192,7 +199,7 @@ Genome NEAT::train(FitnessFunctor &ff, bool useBias) {
         for (Species &species : speciesList) {
             double totalFitness = 0;
             for (size_t id : species.ids) {
-                totalFitness += fitnesses[id];
+                totalFitness += id2Info[id].fitness;
             }
             totalFitnesses.push_back(totalFitness);
         }
@@ -216,7 +223,7 @@ Genome NEAT::train(FitnessFunctor &ff, bool useBias) {
             std::vector<size_t> ids(sit->ids.begin(), sit->ids.end());
             std::vector<double> specFits(sit->ids.size());
             for(auto it = ids.begin(); it != ids.end(); ++it) {
-                specFits[it - ids.begin()] = fitnesses[*it];
+                specFits[it - ids.begin()] = id2Info[*it].fitness;
             }
             std::vector<size_t> specNoCrossShares = getShares(specFits, *ncit);
             std::vector<size_t> specCrossShares = getShares(specFits, *cit);
@@ -224,7 +231,7 @@ Genome NEAT::train(FitnessFunctor &ff, bool useBias) {
             //add noCross genomes
             for(size_t i = 0; i < specNoCrossShares.size(); ++i) {
                 // std::cout << "no cross X " << specNoCrossShares[i] << " of " << *ncit << std::endl;
-                newPopulation.insert(newPopulation.end(), specNoCrossShares[i], population[id2GenomeIdx[ids[i]]]);
+                newPopulation.insert(newPopulation.end(), specNoCrossShares[i], *id2Info[ids[i]].genome);
             }
             //add tickets for cross genomes
             for(size_t i = 0; i < specCrossShares.size(); ++i) {
@@ -251,7 +258,7 @@ Genome NEAT::train(FitnessFunctor &ff, bool useBias) {
                     break;
                 }
                 //take ticket
-                Genome &g1 = population[id2GenomeIdx[(*it)->genomeId]];
+                Genome &g1 = *id2Info[(*it)->genomeId].genome;
                 Genome *g2 = nullptr;
                 (*it)->avail = false;
                 auto it2(it);
@@ -307,8 +314,8 @@ TakeInterSpecies:
                 g2Id = isit->genomeId;
                 isit->avail = false;
 AddGenome:
-                g2 = &population[id2GenomeIdx[g2Id]];
-                newPopulation.push_back(g1.cross(*g2, fitnesses[g1.id()], fitnesses[g2->id()], 0));
+                g2 = id2Info[g2Id].genome;
+                newPopulation.push_back(g1.cross(*g2, id2Info[g1.id()].fitness, id2Info[g2->id()].fitness, 0));
             }
         }
 
@@ -316,17 +323,42 @@ AddGenome:
         innovTracker.clear();
         //mutate
         for(Genome &genome : newPopulation) {
-            if(random.changeWeight()) {
-                if(random.useRandomWeight()) {
-                    genome.randomWeight();
-                } else {
+            // Mutation mutation = random.getMutation();
+            // // ++mCounts[static_cast<size_t>(mutation)];
+            // switch(mutation) {
+            //     case Mutation::PerturbWeight:
+            //         // std::cout << 'p' << std::endl;
+            //         genome.perturbWeight();
+            //         break;
+            //     case Mutation::NewWeight:
+            //         // std::cout << 'r' << std::endl;
+            //         genome.randomWeight();
+            //         break;
+            //     case Mutation::AddConnection:
+            //         // std::cout << 'c' << std::endl;
+            //         genome.addConnection();
+            //         break;
+            //     case Mutation::AddNode:
+            //         // std::cout << 'n' << std::endl;
+            //         genome.addNode();
+            //         break;
+            //     case Mutation::None:
+            //         // std::cout << 'x' << std::endl;
+            //         break;
+            //     default:
+            //         throw Exception("No such mutation");
+            // }
+            if (random.evalProb(params.probWeight)) {
+                if(random.evalProb(params.probUW)) {
                     genome.perturbWeight();
+                } else {
+                    genome.randomWeight();
                 }
             }
-            if(random.addConn()) {
+            if(random.evalProb(params.probConn)) {
                 genome.addConnection();
             }
-            if(random.addNode()) {
+            if(random.evalProb(params.probNode)) {
                 genome.addNode();
             }
         }
@@ -334,7 +366,7 @@ AddGenome:
         //add champions
         for (Species &species : speciesList) {
             if (species.ids.size() > params.minSizeForChamp) {
-                newPopulation.push_back(population[id2GenomeIdx[species.bestCurrent.id]]);
+                newPopulation.push_back(*id2Info[species.bestCurrent.id].genome);
             }
         }
 
@@ -345,6 +377,15 @@ AddGenome:
         // std::cout << "new pop size " << newPopulation.size() << std::endl; 
         population = newPopulation;
     }
+
+    // std::cout << "Counts (perturb, new, conn, node, none): " << std::endl;
+    // size_t mSum = 0;
+    // for(size_t i = 0; i < 5; ++i) {
+    //     mSum += mCounts[i];
+    // }
+    // for(size_t i = 0; i < 5; ++i) {
+    //     std::cout << mCounts[i] << " (" << (mCounts[i] / double(mSum)) << ')' << std::endl;
+    // }
 
     // too many generations:
     throw Exception("Too many generations");
@@ -394,10 +435,10 @@ std::unique_ptr<TaskFunctor> NEAT::getFunctionFromGenome(const Genome &genome) c
     return std::unique_ptr<TaskFunctor>(new Phenotype(genome));
 }
 
-NEAT::NEATFR::NEATFR(std::unordered_map<size_t, double> &fitnesses) : fitnesses(fitnesses) {}
+NEAT::NEATFR::NEATFR(std::unordered_map<size_t, GenomeInfo> &fitnesses) : fitnesses(fitnesses) {}
 
 void NEAT::NEATFR::operator()(Phenotype &p, double fitness) {
-    fitnesses.emplace(p.id(), fitness);
+    fitnesses[p.id()].fitness = fitness;
 }
 
 NEAT::FitnessResult::FitnessResult(size_t id, double fitness) : id(id), fitness(fitness) {}
@@ -418,3 +459,5 @@ Parameters *NEAT::NEATDeps::parameters() { return _parameters; }
 Random *NEAT::NEATDeps::random() { return _random; }
 
 InnovationTracker *NEAT::NEATDeps::innovationTracker() { return _innovationTracker; }
+
+NEAT::GenomeInfo::GenomeInfo(Genome *genome, std::list<Species>::iterator species): genome(genome), species(species) {}

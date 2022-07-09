@@ -8,39 +8,22 @@
 #include <set>
 #include <utility>
 
-struct ConnId {
-    size_t from, to;
-    ConnId(size_t from, size_t to) : from(from), to(to) {}
-    bool operator==(const ConnId &other) const {
-        return from == other.from && to == other.to;
-    }
-};
-
-namespace std {
-    template<>
-    struct hash<ConnId> {
-        size_t operator()(const ConnId &connId) const {
-            return (hash<size_t>{}(connId.from) << 5) ^ hash<size_t>{}(connId.to);
-        }
-    };
-}
-
 //used for initial population
 //fully connected network with no hidden nodes
 Genome::Genome (size_t in, size_t out, size_t id, GenomeDeps *deps, bool useBias) 
 : inputs(in), outputs(out), _id(id), deps(deps), useBias(useBias) {
     //make input nodes
     for (size_t i = 0; i < in; ++i) {
-        nodeGenes.emplace_back(NodeGene::NodeType::Input, i);
+        addNode(NodeGene(NodeGene::NodeType::Input, i));
     }
 
     if (useBias) {
-        nodeGenes.emplace_back(NodeGene::NodeType::Bias, in);
+        addNode(NodeGene(NodeGene::NodeType::Bias, in));
     }
 
     size_t minOutput = nodeGenes.size();
     for(size_t i = 0; i < out; ++i) {
-        nodeGenes.emplace_back(NodeGene::NodeType::Output, nodeGenes.size());
+        addNode(NodeGene(NodeGene::NodeType::Output, nodeGenes.size()));
     }
     size_t endOutput = nodeGenes.size();
     for(size_t i = 0; i < (in + (useBias ? 1 : 0)); ++i) {
@@ -67,7 +50,40 @@ Genome Genome::keepStructure() {
     return newGenome;
 }
 
-void Genome::addNode() {
+void Genome::addNode(NodeGene ng) {
+    nodeGenes.emplace_back(ng);
+}
+
+std::list<ConnectionGene>::iterator Genome::addConnection(ConnectionGene cg) {
+    return connectionGenes.insert(connectionGenes.end(), cg);
+}
+
+bool Genome::identicalStructure(const Genome &genome) const {
+    if(nodeGenes.size() != genome.nodeGenes.size() || connectionGenes.size() != genome.connectionGenes.size()) {
+        return false;
+    }
+    auto nit = nodeGenes.begin();
+    auto onit = genome.nodeGenes.begin();
+    for(; nit != nodeGenes.end(); ++nit, ++onit) {
+        if (*nit != *onit) {
+            return false;
+        }
+    }
+
+    auto cit = connectionGenes.begin();
+    auto ocit = genome.connectionGenes.begin();
+    for(; cit != connectionGenes.end(); ++cit, ++ocit) {
+        //ignore weight and enable
+        if(cit->innovationNumber != ocit->innovationNumber ||
+            cit->from != ocit->from || cit->to != ocit->to) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+ConnectionGene *Genome::findToSplit() {
     std::vector<ConnectionGene*> enabled;
     for (auto it = connectionGenes.begin(); it != connectionGenes.end(); ++it) {
         if (it->enabled && !(useBias && it->from == inputs)) {
@@ -75,9 +91,46 @@ void Genome::addNode() {
         }
     }
     if(enabled.size() == 0) {
+        return nullptr;
+    }
+    return enabled[deps->random()->randomInt(enabled.size())];
+}
+
+bool Genome::findNewConn(size_t &from, size_t &to) {
+    std::unordered_set<ConnId> taken;
+    for(auto &cg : connectionGenes) {
+        taken.emplace(cg.from, cg.to);
+    }
+
+    size_t randomFrom = deps->random()->randomInt(nodeGenes.size());
+    for (size_t i = 0; i < nodeGenes.size(); ++i) {
+        from = (randomFrom + i) % nodeGenes.size();
+        size_t randomTo = deps->random()->randomInt(nodeGenes.size());
+        for(size_t j = 0; j < nodeGenes.size(); ++j) {
+            to = (randomTo + j) % nodeGenes.size();
+            //disallow a connection from a bias to an input or bias
+            if (useBias && (from == inputs) && (to <= inputs)) {
+                continue;
+            }
+            //disallow a connection to a bias
+            if (useBias && (to == inputs)) {
+                continue;
+            }
+            if (taken.find(ConnId(from, to)) == taken.end()) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+void Genome::addNode() {
+    ConnectionGene *toSplit = findToSplit();
+    if(toSplit == nullptr) {
+        std::cerr << "none to split" << std::endl;
         return;
     }
-    ConnectionGene *toSplit = enabled[deps->random()->randomInt(enabled.size())];
     toSplit->enabled = false;
     size_t newNodeId = nodeGenes.size() == 0 ? 0 : (nodeGenes.back().id + 1);
     nodeGenes.emplace_back(NodeGene::NodeType::Hidden, newNodeId);
@@ -88,33 +141,14 @@ void Genome::addNode() {
 }
 
 void Genome::addConnection() {
-    std::unordered_set<ConnId> taken;
-    for(auto &cg : connectionGenes) {
-        taken.emplace(cg.from, cg.to);
+    size_t from, to;
+    if (findNewConn(from, to)) {
+        connectionGenes.emplace_back(from, to, deps->random()->randomWeight(), true);
+        deps->innovationTracker()->assignInnov(connectionGenes.back());
+    } else {
+        std::cerr << "fully connected" << std::endl;
+        //throw 1;
     }
-
-    size_t randomFrom = deps->random()->randomInt(nodeGenes.size());
-    for (size_t i = 0; i < nodeGenes.size(); ++i) {
-        size_t fromIdx = (randomFrom + i) % nodeGenes.size();
-        size_t randomTo = deps->random()->randomInt(nodeGenes.size());
-        for(size_t j = 0; j < nodeGenes.size(); ++j) {
-            size_t toIdx = (randomTo + j) % nodeGenes.size();
-            if (useBias && (fromIdx == inputs) && (toIdx <= inputs)) {
-                continue;
-            }
-            if (useBias && (toIdx == inputs)) {
-                continue;
-            }
-            if (taken.find(ConnId(fromIdx, toIdx)) == taken.end()) {
-                connectionGenes.emplace_back(fromIdx, toIdx, deps->random()->randomWeight(), true);
-                deps->innovationTracker()->assignInnov(connectionGenes.back());
-                return;
-            }
-        }
-    }
-
-    std::cerr << "fully connected" << std::endl;
-    //throw 1;
 }
 
 void Genome::randomWeight() {
@@ -334,6 +368,13 @@ std::ostream &operator<<(std::ostream &out, const Genome &genome) {
 
 NodeGene::NodeGene(NodeType nodeType, size_t id) : nodeType(nodeType), id(id) {}
 
+bool NodeGene::operator==(const NodeGene &other) const {
+    return id == other.id && nodeType == other.nodeType;
+}
+bool NodeGene::operator!=(const NodeGene &other) const {
+    return !operator==(other);
+}
+
 std::ostream &operator<<(std::ostream &out, const NodeGene &ng) {
     out << '(' << ng.id << ", ";
     switch (ng.nodeType) {
@@ -364,6 +405,15 @@ std::ostream &operator<<(std::ostream &out, const NodeGene &ng) {
 
 ConnectionGene::ConnectionGene(size_t from, size_t to, double weight, bool enabled, size_t innovationNumber)
     : from(from), to(to), weight(weight), enabled(enabled), innovationNumber(innovationNumber) {}
+
+bool ConnectionGene::operator==(const ConnectionGene &other) const {
+    return from == other.from && to == other.to && innovationNumber == other.innovationNumber
+        && weight == other.weight && enabled == other.enabled;
+}
+
+bool ConnectionGene::operator!=(const ConnectionGene &other) const {
+    return !operator==(other);
+}
 
 std::ostream &operator<<(std::ostream &out, const ConnectionGene &cg) {
     out << '(' << cg.from << ", " << cg.to << ", " << cg.weight << ", "

@@ -24,7 +24,7 @@ Parameters defaultParams() {
     params.maxStagnantSpeciesGens = 15;
     params.maxStagnantGens = 20;
     params.sizeAfterPrune = 2;
-    params.eliminateBottom = 0.1;
+    params.survivalThresh = 0.20;
 
     //other
     params.populationSize = 150;
@@ -32,9 +32,9 @@ Parameters defaultParams() {
     params.minGenesToNormalize = 20;
 
     //my own
-    params.minRW = -1;
-    params.maxRW = 1;
-    params.deltaUW = 0.05;
+    params.minRW = -8;
+    params.maxRW = 8;
+    params.deltaUW = 2.5;
 
     return params;
 }

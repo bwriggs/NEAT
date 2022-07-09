@@ -46,7 +46,7 @@ struct Parameters {
     size_t maxStagnantGens;
     //number of species left after a pruning
     size_t sizeAfterPrune;
-    double eliminateBottom;
+    double survivalThresh;
 
     //other
     //number of networks in each generation

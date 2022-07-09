@@ -5,6 +5,7 @@
 
 #include <cstdlib>
 #include <list>
+#include <utility>
 
 #include "LibNeat.h"
 #include "Phenotype.h"
@@ -21,6 +22,8 @@ struct NodeGene {
     size_t id;
 
     NodeGene(NodeType = NodeType::Default, size_t=0);
+    bool operator==(const NodeGene&) const;
+    bool operator!=(const NodeGene&) const;
 };
 
 std::ostream &operator<<(std::ostream&, const NodeGene&);
@@ -35,6 +38,9 @@ struct ConnectionGene {
     size_t innovationNumber;
 
     ConnectionGene(size_t, size_t, double, bool = true, size_t = 0);
+
+    bool operator==(const ConnectionGene&) const;
+    bool operator!=(const ConnectionGene&) const;
 };
 
 std::ostream &operator<<(std::ostream&, const ConnectionGene&);
@@ -58,12 +64,18 @@ public:
     Genome keepStructure();
     
     //mutators
-    //probably want back end
-    //separated from randomness
     void addNode();
     void addConnection();
     void randomWeight();
     void perturbWeight();
+
+    //"back-end"
+    //separated from randomness
+    void addNode(NodeGene);
+    std::list<ConnectionGene>::iterator addConnection(ConnectionGene);
+    bool identicalStructure(const Genome&) const;
+    ConnectionGene *findToSplit();
+    bool findNewConn(size_t&,size_t&);
 
     //access
     size_t id() const;

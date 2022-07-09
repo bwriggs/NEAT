@@ -1,3 +1,51 @@
+ideas for network to play a stateful game:
+1) Use finite state machine and add state input
+2) Just have all options for all states as outputs, expect it to learn
+3) Train different networks for each state/task
+
+Example: Blackjack
+States:
+Bet (+ side bet i)
+Action (power set of {Hit, Stand, ...})
+
+Input
+Deck state
+Rule rules (maybe frozen)
+
+Make NEAT::train states for each state
+up to the point of evaluating fitness
+
+Evaluating fitness
+Have a blackjack game where you can just call getNextInput to
+get the next state and input. Get the next network out of the
+population for state while you can, use it's output to advance the game state.
+When a bet settles, update the fitness of all networks whose decisions
+where involved, give them a proportional share.
+
+
+
+AND/OR
+
+evolve network to generate possible plays
+evolve network to calculate expected value
+
+have networks play heads up
+
+
+If this is a case study in user code of my NEAT impl. then
+maybe NEAT::train needs to be an object. Each logical stage can be a function
+that is called by user code. Any stage can be omitted and/or replaced
+by arbitrary user code.
+
+"Redesign 1"
+Make it testable, so you can write tests
+that don't rely on randomness
+
+roughly separate into "objects" used by NEAT::train
+
+
+
+
 idea for art / test
 game of life (with genetic history)
 give each individual a colour
@@ -17,6 +65,8 @@ Epigenetics, protecting valuable DNA. Add another double field
 to connections representing how likely they are to change.
 can use std::discrete_distribution here
 
+Add a copy of a sub-unit, initially disabled
+
 Competition: (just push this off to user code for now)
 allow interaction of phenotypes during fitness evaluation
 later, Environment, mapping from network output to Environment change,
@@ -28,3 +78,26 @@ based on human (/animal) psychology, optimal degree of similarity
 inputs are delta, fitness
 maybe reduce to a few possible mates, then have genomes mate selection network choose
 maybe barely reduce, really give higher fitness genomes first pick
+
+
+Artificial Selection / training
+
+network to design good mutations
+take aligned genome, produce high fitness cross
+transformer, train on a ton of networks for various tasks
+fine tune during training for new task, produce more networks
+this way as fine tuning improves the fitness enough
+
+attention
+maybe allow attention to mutate and adjust speciation to allow it
+
+meta-attention
+allow the evolution of new inputs, adjust speciation to allow it
+
+
+Bugs/misc.
+Maybe do one big weight matrix for recurrent connections.
+Accumulate layer values in one vector and create a sparse
+matrix to record the recurrent connections. Update all recurrentVals
+after the loop. Potentially just use this flattened representation
+instead of recurrentVals.

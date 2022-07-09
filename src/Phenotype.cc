@@ -166,8 +166,11 @@ std::vector<double> Phenotype::operator()(std::vector<double> input) {
 
     if (useBias) input.push_back(1);
     Eigen::VectorXd vec = Eigen::VectorXd::Map(input.data(), input.size());
+    // std::cout << "Before Recurr: " << vec << std::endl;
     vec += recurrentVals[0];
+    // std::cout << "After Recurr: " << vec << std::endl;
     vec = vec.unaryExpr(&sigmoid);
+    // std::cout << "After sigmoid: " << vec << std::endl;
 
     std::vector<double> output(outputs());
     for(size_t i = 0; ; ++i) {
@@ -176,6 +179,8 @@ std::vector<double> Phenotype::operator()(std::vector<double> input) {
         auto recurrRes = recurrentLinks.find(i);
         if (recurrRes != recurrentLinks.end()) {
             for(const RecurrentLink& rl : recurrRes->second) {
+                // std::cout << "Adding recurr: (" << rl.lsidx.layerIdx << ", " 
+                    // << rl.lsidx.idx << ") --" << rl.weight << ">> " << rl.fromIdx << std::endl;
                 recurrentVals[rl.lsidx.layerIdx][rl.lsidx.idx] += vec(rl.fromIdx) * rl.weight;
             }
         }
@@ -186,6 +191,7 @@ std::vector<double> Phenotype::operator()(std::vector<double> input) {
             size_t trueNumInputs = inputs() + (useBias ? 1 : 0);
             for (const OutputInfo &oi : outputRes->second) {
                 size_t outputIdx = oi.nodeIdx - trueNumInputs;
+                // std::cout << "Recording output: " << outputIdx << "->" << oi.vecIdx << std::endl;
                 output[outputIdx] = vec(oi.vecIdx);
             }
         }
@@ -195,8 +201,11 @@ std::vector<double> Phenotype::operator()(std::vector<double> input) {
         }
 
         vec.applyOnTheLeft(weights[i]);
+        // std::cout << "After weights: " << vec << std::endl;
         vec += recurrentVals[i + 1];
+        // std::cout << "After recurr: " << vec << std::endl;
         vec = vec.unaryExpr(&sigmoid);
+        // std::cout << "After sigmoid: " << vec << std::endl;
     }
 
     return output;

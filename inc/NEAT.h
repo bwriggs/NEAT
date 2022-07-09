@@ -51,12 +51,6 @@ private:
         FitnessResult(size_t = 0, double = std::numeric_limits<double>::min());
     };
 
-    struct NEATFR : public FitnessRecorder  {
-        NEATFR(std::unordered_map<size_t, double>&);
-        void operator()(Phenotype&, double) override;
-        std::unordered_map<size_t, double> &fitnesses;
-    };
-
     struct Species {
         Species() = default;
         Species(Genome);
@@ -70,6 +64,20 @@ private:
 
     struct FitnessComp {
         bool operator()(const FitnessResult&, const FitnessResult&) const;
+    };
+
+    struct GenomeInfo {
+        Genome *genome;
+        std::list<Species>::iterator species;
+        double fitness;
+        GenomeInfo(Genome*, std::list<Species>::iterator);
+        GenomeInfo() = default;
+    };
+
+    struct NEATFR : public FitnessRecorder  {
+        NEATFR(std::unordered_map<size_t, GenomeInfo>&);
+        void operator()(Phenotype&, double) override;
+        std::unordered_map<size_t, GenomeInfo> &fitnesses;
     };
 
     struct CrossTicket {

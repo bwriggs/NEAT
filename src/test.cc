@@ -2,41 +2,42 @@
 #include <vector>
 #include <cmath>
 
+#define __NEAT_UNIDIRECTIONAL__
+
 #include "NEAT.h"
 #include "SimpleFitnessFunctor.h"
 
 class XORFitnessFunctor : public SimpleFitnessFunctor {
 public:
-    XORFitnessFunctor(double reqFitness, int seed) : SimpleFitnessFunctor(2, 1, reqFitness),
-         gen(seed < 0 ? std::random_device{}() : seed), dist(0,3) {
-            tests.emplace_back(0, 0);
-            tests.emplace_back(0, 1);
-            tests.emplace_back(1, 0);
-            tests.emplace_back(1, 1);
-         }
+    XORFitnessFunctor(double reqFitness) : SimpleFitnessFunctor(2, 1, reqFitness), gen(std::random_device()()), dist(0,3) {
+        tests.emplace_back(0, 0);
+        tests.emplace_back(0, 1);
+        tests.emplace_back(1, 0);
+        tests.emplace_back(1, 1);
+    }
     double err(size_t lhs, size_t rhs, double out) {
-        return abs(out - (lhs^rhs));
+        return abs(out - double(lhs^rhs));
     }
     double operator()(Phenotype &p) {
-        size_t numTests = 12;
-        double fitness = numTests;
-        for(size_t i = 0; i < numTests; ++i) {
-            size_t idx = dist(gen);
-            size_t lhs = tests[idx].first;
-            size_t rhs = tests[idx].second;
+        size_t iters = 8;
+        double fitness = iters;
+        for(size_t i = 0; i < iters; ++i) {
+            auto tc = tests[i%4]; //tests[dist(gen)];
+            size_t lhs = tc.first;
+            size_t rhs = tc.second;
             fitness -= err(lhs, rhs, p(std::vector<double>{(double)lhs, (double)rhs})[0]);
         }
-        fitness = (fitness * 4) / numTests;
-        return fitness * fitness;
+        fitness = (fitness * 4) / iters;
+        return fitness * (fitness < 0 ? -fitness : fitness);
     }
-    std::mt19937 gen;
-    std::uniform_int_distribution<int> dist;
     std::vector<std::pair<size_t, size_t>> tests;
+    std::mt19937 gen;
+    std::uniform_int_distribution<size_t> dist;
 };
 
 int main(int argc, char *argv[]) {
     int seed = -1;
-    double reqFitness = 15.99;
+    double reqFitness = 15.995;
 
     try {
         switch(argc) {
@@ -58,9 +59,8 @@ int main(int argc, char *argv[]) {
 
 
     NEAT neat = seed >= 0 ? NEAT(seed) : NEAT(); //1234
-    neat.params.populationSize = 350;
     neat.params.maxGenerations = -1;
-    XORFitnessFunctor xorff(reqFitness, seed);
+    XORFitnessFunctor xorff(reqFitness);
     try {
         Genome g = neat.train(xorff);
         auto func = Phenotype(g);//neat.getFunctionFromGenome(g);

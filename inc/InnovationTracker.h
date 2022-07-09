@@ -37,6 +37,8 @@ public:
     //forget innovations (called at the start
     //of a new generation)
     void clear();
+    //reset to innovation # 0
+    void reset();
 
 private:
     //reference to a global innovation number

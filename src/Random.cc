@@ -1,36 +1,33 @@
 #include "Random.h"
 #include "Parameters.h"
+#include <iostream>
 
-Random::Random(RandomDeps *deps, size_t seed) : deps(deps), gen(seed) {}
+Random::Random(RandomDeps *deps, size_t seed) : deps(deps), gen(seed) {
+    Parameters *params = deps->parameters();
+    mutationDist = std::discrete_distribution<size_t>{params->probWeight * params->probUW, params->probWeight * (1 - params->probUW),
+        params->probConn, params->probNode, 1 - params->probWeight - params->probConn - params->probNode};
+}
 
-Random::Random(RandomDeps *deps) : Random(deps, std::random_device{}()) {}
+Random::Random(RandomDeps *deps) : Random::Random(deps, std::random_device()()) {}
 
 double Random::randomWeight() {
     return randRange(deps->parameters()->minRW, deps->parameters()->maxRW);
 }
 
 double Random::perturbedWeight(double weight) {
-    return randRange(weight - deps->parameters()->deltaUW, weight + deps->parameters()->deltaUW);
+    double newWeight = randRange(weight - deps->parameters()->deltaUW, weight + deps->parameters()->deltaUW);
+    if (newWeight < deps->parameters()->minRW) {
+        return deps->parameters()->minRW;
+    }
+    if(newWeight > deps->parameters()->maxRW) {
+        return deps->parameters()->maxRW;
+    }
+    return newWeight;
 }
 
-bool Random::changeWeight() {
-    return evalProb(deps->parameters()->probWeight);
-}
-
-bool Random::addConn() {
-    return evalProb(deps->parameters()->probConn);
-}
-
-bool Random::addNode() {
-    return evalProb(deps->parameters()->probNode);
-}
-
-bool Random::useRandomWeight() {
-    return !evalProb(deps->parameters()->probUW);
-}
-
-bool Random::usePerturbedWeight() {
-    return evalProb(deps->parameters()->probUW);
+Mutation Random::getMutation() {
+    size_t mutation = mutationDist(gen);
+    return static_cast<Mutation>(mutation);
 }
 
 bool Random::crossInterSpecies() {
@@ -43,6 +40,10 @@ size_t Random::randomInt(size_t end) {
 
 size_t Random::randomInt(size_t min, size_t end) {
     return min + randomInt(end - min);
+}
+
+double Random::randomReal(double min, double max) {
+    return min + realDist(gen) * (max - min);
 }
 
 bool Random::evalProb(double prob) {

@@ -3,29 +3,35 @@ INCDIR = inc
 OBJDIR = obj
 BINDIR = bin
 
-MAKEFILE_NAME = ${firstword ${MAKEFILE_LIST}}# makefile name
+MAKEFILE_NAME := ${firstword ${MAKEFILE_LIST}}# makefile name
 
 CXX=g++
-CXXFLAGS=-I$(INCDIR) -std=c++14 -Wall -Wextra -MMD -g #-v
+CXXFLAGS=-I$(INCDIR) -std=c++14 -Wall -Wextra -MMD #-g #-v
 
-rm=rm -f
+rm := rm -f
 
 target1 = test
 objnames1 = test.o Genome.o Parameters.o Random.o Phenotype.o TaskFunctor.o BaseFunctor.o InnovationTracker.o \
 			FitnessFunctor.o LibNeat.o NEAT.o SimpleFitnessFunctor.o
 
-# target2 = randomcode
-# objnames2 = BFIInterpretter.o RandomCode.o
+target2 = genomeTest
+objnames2 = GenomeTest.o Genome.o Parameters.o Random.o InnovationTracker.o LibNeat.o
 
-fulltarget1 = $(target1:%=$(BINDIR)/%)
-# fulltarget2 = $(target2:%=$(BINDIR)/%)
-targets = $(fulltarget1) # $(fulltarget2)
+target3 = phenotypeTest
+objnames3 = PhenotypeTest.o Phenotype.o Genome.o Parameters.o Random.o InnovationTracker.o LibNeat.o \
+			BaseFunctor.o TaskFunctor.o
 
-objects1 = $(objnames1:%=$(OBJDIR)/%)
-# objects2 = $(objnames2:%=$(OBJDIR)/%)
-objects = $(objects1) # $(objects2)
+fulltarget1 := $(target1:%=$(BINDIR)/%)
+fulltarget2 := $(target2:%=$(BINDIR)/%)
+fulltarget3 := $(target3:%=$(BINDIR)/%)
+targets := $(fulltarget1) $(fulltarget2) $(fulltarget3)
 
-depends = ${objects:.o=.d}
+objects1 := $(objnames1:%=$(OBJDIR)/%)
+objects2 := $(objnames2:%=$(OBJDIR)/%)
+objects3 := $(objnames3:%=$(OBJDIR)/%)
+objects := $(objects1) $(filter-out $(objects1), $(objects2)) $(filter-out $(objects1), $(filter-out $(objects2), $(objects3)))
+
+depends := ${objects:.o=.d}
 
 .PHONY: clean all
 
@@ -34,8 +40,11 @@ all: $(targets)
 $(fulltarget1) : $(objects1)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
-# $(fulltarget2) : $(objects2)
-# 	$(CXX) $(CXXFLAGS) $^ -o $@
+$(fulltarget2) : $(objects2)
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
+$(fulltarget3) : $(objects3)
+	$(CXX) $(CXXFLAGS) $^ -o $@
 
 $(objects): $(OBJDIR)/%.o : $(SRCDIR)/%.cc
 	$(CXX) $(CXXFLAGS) -c $< -o $@

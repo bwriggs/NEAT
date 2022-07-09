@@ -18,6 +18,10 @@ void InnovationTracker::clear() {
     innovs.clear();
 }
 
+void InnovationTracker::reset() {
+    nextInnovation = 0;
+}
+
 InnovId::InnovId(size_t from, size_t to) : from(from), to(to) {}
 
 bool InnovId::operator==(const InnovId &other) const {
